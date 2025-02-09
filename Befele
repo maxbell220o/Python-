@@ -1,0 +1,5 @@
+ ls -l /dev/serial* lrwxrwxrwx 1 root root 5 Nov 21 07:54 /dev/serial0 -> ttyS0 lrwxrwxrwx 1 root root 7 Nov 21 07:54 /dev/serial1 -> ttyAMA0 $ ls - l /dev/ttyS0crw-rw----1rootdialout4,64Nov2107:54/dev/ttyS0$groupspiadmdialoutcdromsudoaudiovideoplugdevgamesusersinputnetdevgpioi2cspi$sudo grep uart /boot/cmdline.txt enable_uart=1$ sudo cat /boot/cmdline.txt dwc_otg.lpm_enable=0console=tty1root=PARTUUID (nomoreexistsconsole=ttyS0,115200
+git Klon --rekursiv
+https://code.d-logic.com/nfc-rfid-reader-sdk/ufr-examples-reader_open-c
+$make armhf
+$ ./ufr-reader-openReferenzen:https://spellfoundry.com/2016/05/29/configuring-gpio-serial-port-raspbian-jessie-including-pi-3/ https://www.raspberrypi.org/forums/viewtopic.php?t=151454 https://www.raspberrypi.org/forums/viewtopic.php?f=29&t=144858&p=955297#p955236 https://raspberrypi.stackexchange.com/a/54766
