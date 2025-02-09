@@ -1,0 +1,17 @@
+
+#!usr/bin/env python
+
+import RPi.GPIO as GPIO
+from mfrc522 import SimpleMFRC522
+
+reader = SimpleMFRC522()
+
+try:
+    print("Scan Card Now")
+    id, text = reader.read()
+    print("Current ID:")
+    print(id)
+    print("Place Card for Write, Then Press ENTER")
+    input("")
+    reader.write(text)
+    print("Write Complete")
