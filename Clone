@@ -1,0 +1,17 @@
+import RPi.GPIO as GPIO
+from mfrc522 import SimpleMFRC522
+
+reader = SimpleMFRC522()
+
+try:
+    print("Bitte die Originalkarte zum Auslesen auflegen...")
+    original_id, original_text = reader.read()
+    print(f"Originalkarten-ID: {original_id}")
+    print(f"Originalkarten-Daten: {original_text}")
+
+    print("Bitte die leere Karte zum Beschreiben auflegen und Enter drücken...")
+    input()
+    reader.write(original_text)
+    print("Klonen abgeschlossen.")
+finally:
+    GPIO.cleanup()
