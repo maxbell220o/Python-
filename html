@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eingabeformular</title>
+</head>
+<body>
+    <h2>Gib eine vierstellige Zahl ein:</h2>
+    <input type="text" id="eingabe" placeholder="1234" maxlength="4" pattern="\d{4}" title="Bitte gib genau vier Zahlen ein">
+    <button onclick="zeigeEingabe()">Absenden</button>
+    <p id="ausgabe"></p>
+
+    <script>
+        function zeigeEingabe() {
+            var text = document.getElementById("eingabe").value;
+            if (/^\d{4}$/.test(text)) {
+                document.getElementById("ausgabe").innerText = "Du hast eingegeben: " + text;
+            } else {
+                document.getElementById("ausgabe").innerText = "Bitte gib genau vier Zahlen ein!";
+            }
+        }
+    </script>
+</body>
+</html>
