@@ -1,17 +1,102 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Python Eingabeformular</title>
-</head>
-<body>
-    <h2>Gib eine vierstellige Zahl ein:</h2>
-    <form action="/submit" method="post">
-        <input type="text" name="zahl" placeholder="1234" maxlength="4" required>
-        <button type="submit">Absenden</button>
-    </form>
-</body>
-</html>
+import time
+import os
+from gpiozero import OutputDevice
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
+# Motor-Pins
+motorPins = (18, 23, 24, 25)
+motors = [OutputDevice(pin) for pin in motorPins]
+CCWStep = (0x01, 0x02, 0x04, 0x08)  # Gegen den Uhrzeigersinn
+CWStep = (0x08, 0x04, 0x02, 0x01)  # Uhrzeigersinn
+
+# Webserver-Konfiguration
+host_name = '192.168.178.51'  # Raspberry Pi IP-Adresse
+host_port = 8000
+
+# Keypad-Matrix (4x4)
+KEYS = [
+    ['1', '2', '3', 'A'],
+    ['4', '5', '6', 'B'],
+    ['7', '8', '9', 'C'],
+    ['*', '0', '#', 'D']
+]
+
+# GPIO-Pins für Zeilen und Spalten
+ROW_PINS = [5, 6, 13, 19]
+COL_PINS = [12, 16, 20, 21]
+
+# Motorsteuerung
+def moveOnePeriod(direction, ms):    
+    for j in range(4):
+        for i in range(4):
+            if direction == 1:
+                motors[i].on() if (CCWStep[j] == 1 << i) else motors[i].off()
+            else:
+                motors[i].on() if CWStep[j] == 1 << i else motors[i].off()
+        time.sleep(max(ms * 0.001, 0.003))
+        
+def moveSteps(direction, ms, steps):
+    for _ in range(steps):
+        moveOnePeriod(direction, ms)
+
+def motorStop():
+    for motor in motors:
+        motor.off()
+
+def Door():
+    moveSteps(1, 3, 128)
+    time.sleep(0.5)
+    moveSteps(0, 3, 128)
+    time.sleep(0.5)
+
+# Webserver-Klasse
+class MyServer(BaseHTTPRequestHandler):
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+
+    def _redirect(self, path):
+        self.send_response(303)
+        self.send_header('Content-type', 'text/html')
+        self.send_header('Location', path)
+        self.end_headers()
+
+    def do_GET(self):
+        html = '''
+        <html>
+        <body style="width:960px; margin: 20px auto;">
+        <h1>Webserver für Türsteuerung</h1>
+        <form action="/" method="POST">
+            <input type="submit" name="submit" value="Öffnen">
+            <input type="submit" name="submit" value="Schließen">
+        </form>
+        </body>
+        </html>
+        '''
+        self.do_HEAD()
+        self.wfile.write(html.encode("utf-8"))
+
+    def do_POST(self):
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length).decode("utf-8").split("=")[1]
+        
+        if post_data == "Öffnen":
+            Door()
+        elif post_data == "Schließen":
+            motorStop()
+        
+        print(f"Aktion: {post_data}")
+        self._redirect('/')
+
+# Webserver starten
+if __name__ == '__main__':
+    print('Starte Webserver...')
+    http_server = HTTPServer((host_name, host_port), MyServer)
+    print(f"Server läuft unter {host_name}:{host_port}")
+    try:
+        http_server.serve_forever()
+    except KeyboardInterrupt:
+        print("Beende Server...")
+        http_server.server_close()
 
