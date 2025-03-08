@@ -1,5 +1,6 @@
 import time
 import os
+import RPi.GPIO as GPIO
 from gpiozero import OutputDevice
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -25,7 +26,69 @@ KEYS = [
 ROW_PINS = [5, 6, 13, 19]
 COL_PINS = [12, 16, 20, 21]
 
-# Motorsteuerung
+SECRET_CODE = "1234"
+entered_code = ""
+
+class MyServer(BaseHTTPRequestHandler):
+    def do_GET(self):
+        html = '''
+        <html><body>
+        <h1>Türsteuerung</h1>
+        <form action="/" method="POST">
+            Neuen Code setzen: <input type="text" name="code">
+            <input type="submit" value="Setzen">
+        </form>
+        </body></html>
+        '''
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.write(html.encode("utf-8"))
+
+    def do_POST(self):
+        global SECRET_CODE
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length).decode("utf-8")
+        new_code = post_data.split("=")[1]
+        SECRET_CODE = new_code
+        print(f"Neuer Code gesetzt: {SECRET_CODE}")
+        self.send_response(303)
+        self.send_header("Location", "/")
+        self.end_headers()
+
+
+def setup():
+    GPIO.setmode(GPIO.BCM)
+    for row in ROW_PINS:
+        GPIO.setup(row, GPIO.OUT)
+        GPIO.output(row, GPIO.HIGH)
+    for col in COL_PINS:
+        GPIO.setup(col, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+def read_keypad():
+    global entered_code
+    for row_index, row in enumerate(ROW_PINS):
+        GPIO.output(row, GPIO.LOW)
+        for col_index, col in enumerate(COL_PINS):
+            if GPIO.input(col) == GPIO.LOW:
+                time.sleep(0.1)
+                while GPIO.input(col) == GPIO.LOW:
+                    pass
+                GPIO.output(row, GPIO.HIGH)
+                key = KEYS[row_index][col_index]
+                print(f"Taste gedrückt: {key}")
+                if key == "#":
+                    if entered_code == SECRET_CODE:
+                        print("Code korrekt - Tür öffnet")
+                        Door()
+                    else:
+                        print("Falscher Code!")
+                    entered_code = ""
+                else:
+                    entered_code += key
+                return
+        GPIO.output(row, GPIO.HIGH)
+
 def moveOnePeriod(direction, ms):    
     for j in range(4):
         for i in range(4):
@@ -49,54 +112,27 @@ def Door():
     moveSteps(0, 3, 128)
     time.sleep(0.5)
 
-# Webserver-Klasse
-class MyServer(BaseHTTPRequestHandler):
-    def do_HEAD(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-
-    def _redirect(self, path):
-        self.send_response(303)
-        self.send_header('Content-type', 'text/html')
-        self.send_header('Location', path)
-        self.end_headers()
-
-    def do_GET(self):
-        html = '''
-        <html>
-        <body style="width:960px; margin: 20px auto;">
-        <h1>Webserver für Türsteuerung</h1>
-        <form action="/" method="POST">
-            <input type="submit" name="submit" value="Öffnen">
-            <input type="submit" name="submit" value="Schließen">
-        </form>
-        </body>
-        </html>
-        '''
-        self.do_HEAD()
-        self.wfile.write(html.encode("utf-8"))
-
-    def do_POST(self):
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length).decode("utf-8").split("=")[1]
-        
-        if post_data == "Öffnen":
-            Door()
-        elif post_data == "Schließen":
-            motorStop()
-        
-        print(f"Aktion: {post_data}")
-        self._redirect('/')
-
-# Webserver starten
-if __name__ == '__main__':
-    print('Starte Webserver...')
-    http_server = HTTPServer((host_name, host_port), MyServer)
-    print(f"Server läuft unter {host_name}:{host_port}")
+def main():
+    setup()
+    print("Tastenfeld bereit! Drücke eine Taste.")
     try:
-        http_server.serve_forever()
+        while True:
+            read_keypad()
+            time.sleep(0.1)
     except KeyboardInterrupt:
-        print("Beende Server...")
-        http_server.server_close()
+        print("Beende Programm...")
+        GPIO.cleanup()
 
+if __name__ == '__main__':
+    print("Starte Keypad-Steuerung...")
+    http_server = HTTPServer((host_name, host_port), MyServer)
+    print("Server gestartet - {}:{}".format(host_name, host_port))
+    try:
+        from threading import Thread
+        web_thread = Thread(target=http_server.serve_forever)
+        web_thread.start()
+        main()
+    except KeyboardInterrupt:
+        print("Beende Programm...")
+        http_server.server_close()
+        GPIO.cleanup()
