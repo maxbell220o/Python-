@@ -6,12 +6,12 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # Motor-Pins
 motorPins = (18, 23, 24, 25)
-motors = [OutputDevice(pin) for pin in motorPins]
-CCWStep = (0x01, 0x02, 0x04, 0x08)  # Gegen den Uhrzeigersinn
-CWStep = (0x08, 0x04, 0x02, 0x01)  # Uhrzeigersinn
+motors = list(map(lambda pin: OutputDevice(pin), motorPins))
+CCWStep = (0x01, 0x02, 0x04, 0x08)
+CWStep = (0x08, 0x04, 0x02, 0x01)
 
 # Webserver-Konfiguration
-host_name = '192.168.178.51'  # Raspberry Pi IP-Adresse
+host_name = '192.168.178.51'
 host_port = 8000
 
 # Keypad-Matrix (4x4)
@@ -96,7 +96,9 @@ def moveOnePeriod(direction, ms):
                 motors[i].on() if (CCWStep[j] == 1 << i) else motors[i].off()
             else:
                 motors[i].on() if CWStep[j] == 1 << i else motors[i].off()
-        time.sleep(max(ms * 0.001, 0.003))
+        if ms < 3:
+            ms = 3
+        time.sleep(ms * 0.001)
         
 def moveSteps(direction, ms, steps):
     for _ in range(steps):
