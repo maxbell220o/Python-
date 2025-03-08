@@ -1,0 +1,157 @@
+import time
+import os
+import RPi.GPIO as GPIO
+from gpiozero import OutputDevice, LED, Buzzer
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+# Ultraschallsensor Pins
+TRIG = 23
+ECHO = 24
+
+# Ampel-LEDs
+led_rot = LED(17)
+led_gruen = LED(27)
+
+# Alarm
+alarm = Buzzer(22)
+
+# Webserver-Konfiguration
+host_name = '192.168.178.51'
+host_port = 8000
+
+# Keypad-Matrix (4x4)
+KEYS = [
+    ['1', '2', '3', 'A'],
+    ['4', '5', '6', 'B'],
+    ['7', '8', '9', 'C'],
+    ['*', '0', '#', 'D']
+]
+
+# GPIO-Pins für Zeilen und Spalten
+ROW_PINS = [5, 6, 13, 19]
+COL_PINS = [12, 16, 20, 21]
+
+SECRET_CODE = "1234"
+entered_code = ""
+
+def setup():
+    GPIO.setmode(GPIO.BCM)
+    for row in ROW_PINS:
+        GPIO.setup(row, GPIO.OUT)
+        GPIO.output(row, GPIO.HIGH)
+    for col in COL_PINS:
+        GPIO.setup(col, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(TRIG, GPIO.OUT)
+    GPIO.setup(ECHO, GPIO.IN)
+
+def read_keypad():
+    global entered_code
+    for row_index, row in enumerate(ROW_PINS):
+        GPIO.output(row, GPIO.LOW)
+        for col_index, col in enumerate(COL_PINS):
+            if GPIO.input(col) == GPIO.LOW:
+                time.sleep(0.1)
+                while GPIO.input(col) == GPIO.LOW:
+                    pass
+                GPIO.output(row, GPIO.HIGH)
+                key = KEYS[row_index][col_index]
+                print(f"Taste gedrückt: {key}")
+                if key == "#":
+                    if entered_code == SECRET_CODE:
+                        print("Code korrekt - Ampel grün")
+                        unlock_door()
+                    else:
+                        print("Falscher Code!")
+                    entered_code = ""
+                else:
+                    entered_code += key
+                return
+        GPIO.output(row, GPIO.HIGH)
+
+def measure_distance():
+    GPIO.output(TRIG, True)
+    time.sleep(0.00001)
+    GPIO.output(TRIG, False)
+    while GPIO.input(ECHO) == 0:
+        pulse_start = time.time()
+    while GPIO.input(ECHO) == 1:
+        pulse_end = time.time()
+    duration = pulse_end - pulse_start
+    distance = duration * 17150
+    return distance
+
+def unlock_door():
+    led_rot.off()
+    led_gruen.on()
+    while True:
+        distance = measure_distance()
+        print(f"Gemessene Distanz: {distance} cm")
+        if distance < 30:  # Wenn jemand durchgeht
+            led_gruen.off()
+            led_rot.on()
+            print("Ampel auf Rot")
+            return
+
+def check_intruder():
+    while True:
+        distance = measure_distance()
+        if distance < 30 and not led_gruen.is_lit:  # Jemand geht ohne Code durch
+            print("Eindringling erkannt! Alarm aktiv!")
+            alarm.on()
+            time.sleep(5)
+            alarm.off()
+        time.sleep(1)
+
+def main():
+    setup()
+    print("Tastenfeld und Sensor bereit!")
+    try:
+        while True:
+            read_keypad()
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        print("Beende Programm...")
+        GPIO.cleanup()
+
+class MyServer(BaseHTTPRequestHandler):
+    def do_GET(self):
+        html = '''
+        <html><body>
+        <h1>Türsteuerung</h1>
+        <form action="/" method="POST">
+            Neuen Code setzen: <input type="text" name="code">
+            <input type="submit" value="Setzen">
+        </form>
+        </body></html>
+        '''
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.write(html.encode("utf-8"))
+
+    def do_POST(self):
+        global SECRET_CODE
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length).decode("utf-8")
+        new_code = post_data.split("=")[1]
+        SECRET_CODE = new_code
+        print(f"Neuer Code gesetzt: {SECRET_CODE}")
+        self.send_response(303)
+        self.send_header("Location", "/")
+        self.end_headers()
+
+if __name__ == '__main__':
+    print("Starte Keypad-Steuerung...")
+    http_server = HTTPServer((host_name, host_port), MyServer)
+    print("Server gestartet - {}:{}".format(host_name, host_port))
+    try:
+        from threading import Thread
+        web_thread = Thread(target=http_server.serve_forever)
+        intruder_thread = Thread(target=check_intruder)
+        web_thread.start()
+        intruder_thread.start()
+        main()
+    except KeyboardInterrupt:
+        print("Beende Programm...")
+        http_server.server_close()
+        GPIO.cleanup()
