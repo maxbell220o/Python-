@@ -76,17 +76,11 @@ def measure_distance():
     time.sleep(0.00001)
     GPIO.output(TRIG, False)
     pulse_start = time.time()
-    timeout_start = time.time()
-    
+    pulse_end = time.time()
     while GPIO.input(ECHO) == 0:
         pulse_start = time.time()
-        if time.time() - timeout_start > 5:
-            return None  # Timeout als Person durchgegangen werten
-    
-    pulse_end = time.time()
     while GPIO.input(ECHO) == 1:
         pulse_end = time.time()
-    
     duration = pulse_end - pulse_start
     distance = duration * 17150
     return distance
@@ -94,14 +88,10 @@ def measure_distance():
 def unlock_door():
     led_rot.off()
     led_gruen.on()
-    timeout_start = time.time()
     while True:
         distance = measure_distance()
-        if distance is None or distance < 30:
-            lock_door()
-            return
-        if time.time() - timeout_start > 5:
-            print("Person ist durchgegangen - Tür wird gesperrt")
+        print(f"Gemessene Distanz: {distance} cm")
+        if distance < 30:
             lock_door()
             return
 
@@ -114,7 +104,7 @@ def check_intruder():
     while True:
         try:
             distance = measure_distance()
-            if distance is None or (distance < 30 and not led_gruen.is_lit):
+            if distance < 30 and not led_gruen.is_lit:
                 print("Eindringling erkannt! Alarm aktiv!")
                 alarm.on()
                 time.sleep(5)
@@ -177,8 +167,3 @@ if __name__ == '__main__':
         print("Beende Programm...")
         http_server.server_close()
         GPIO.cleanup()
-
-        http_server.server_close()
-        GPIO.cleanup()
-
-
