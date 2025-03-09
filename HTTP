@@ -3,6 +3,7 @@ import os
 import RPi.GPIO as GPIO
 from gpiozero import OutputDevice, LED, Buzzer
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from threading import Thread
 
 # Ultraschallsensor Pins
 TRIG = 23
@@ -36,13 +37,13 @@ entered_code = ""
 
 def setup():
     GPIO.setmode(GPIO.BCM)
+    GPIO.setup(TRIG, GPIO.OUT)
+    GPIO.setup(ECHO, GPIO.IN)
     for row in ROW_PINS:
         GPIO.setup(row, GPIO.OUT)
         GPIO.output(row, GPIO.HIGH)
     for col in COL_PINS:
         GPIO.setup(col, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.setup(TRIG, GPIO.OUT)
-    GPIO.setup(ECHO, GPIO.IN)
 
 def read_keypad():
     global entered_code
@@ -72,6 +73,8 @@ def measure_distance():
     GPIO.output(TRIG, True)
     time.sleep(0.00001)
     GPIO.output(TRIG, False)
+    pulse_start = time.time()
+    pulse_end = time.time()
     while GPIO.input(ECHO) == 0:
         pulse_start = time.time()
     while GPIO.input(ECHO) == 1:
@@ -86,7 +89,7 @@ def unlock_door():
     while True:
         distance = measure_distance()
         print(f"Gemessene Distanz: {distance} cm")
-        if distance < 30:  # Wenn jemand durchgeht
+        if distance < 30:
             led_gruen.off()
             led_rot.on()
             print("Ampel auf Rot")
@@ -94,13 +97,17 @@ def unlock_door():
 
 def check_intruder():
     while True:
-        distance = measure_distance()
-        if distance < 30 and not led_gruen.is_lit:  # Jemand geht ohne Code durch
-            print("Eindringling erkannt! Alarm aktiv!")
-            alarm.on()
-            time.sleep(5)
-            alarm.off()
-        time.sleep(1)
+        try:
+            distance = measure_distance()
+            if distance < 30 and not led_gruen.is_lit:
+                print("Eindringling erkannt! Alarm aktiv!")
+                alarm.on()
+                time.sleep(5)
+                alarm.off()
+            time.sleep(1)
+        except RuntimeError as e:
+            print(f"Fehler bei der Distanzmessung: {e}")
+            time.sleep(1)
 
 def main():
     setup()
@@ -142,10 +149,10 @@ class MyServer(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     print("Starte Keypad-Steuerung...")
+    setup()
     http_server = HTTPServer((host_name, host_port), MyServer)
     print("Server gestartet - {}:{}".format(host_name, host_port))
     try:
-        from threading import Thread
         web_thread = Thread(target=http_server.serve_forever)
         intruder_thread = Thread(target=check_intruder)
         web_thread.start()
@@ -155,3 +162,4 @@ if __name__ == '__main__':
         print("Beende Programm...")
         http_server.server_close()
         GPIO.cleanup()
+
