@@ -64,6 +64,8 @@ def read_keypad():
                     else:
                         print("Falscher Code!")
                     entered_code = ""
+                elif key == "A":
+                    lock_door()
                 else:
                     entered_code += key
                 return
@@ -90,10 +92,13 @@ def unlock_door():
         distance = measure_distance()
         print(f"Gemessene Distanz: {distance} cm")
         if distance < 30:
-            led_gruen.off()
-            led_rot.on()
-            print("Ampel auf Rot")
+            lock_door()
             return
+
+def lock_door():
+    led_gruen.off()
+    led_rot.on()
+    print("Tür gesperrt - Ampel auf Rot")
 
 def check_intruder():
     while True:
@@ -162,4 +167,5 @@ if __name__ == '__main__':
         print("Beende Programm...")
         http_server.server_close()
         GPIO.cleanup()
+
 
